@@ -1,0 +1,28 @@
+﻿@using TestWithValue.Domain.ViewModels.CaseViewMode
+@model CreateCaseViewModel
+
+<h2>ایجاد پرونده جدید</h2>
+
+<form asp-action="Create" method="post">
+    <div>
+        <label>عنوان پرونده</label>
+        <input asp-for="Title" />
+        <span asp-validation-for="Title"></span>
+    </div>
+
+    <div>
+        <label>نوع پرونده</label>
+        <input asp-for="CaseType" />
+        <span asp-validation-for="CaseType"></span>
+    </div>
+
+    <div>
+        <label>موقعیت</label>
+        <select asp-for="LocationId" asp-items="Model.Locations"></select>
+        <span asp-validation-for="LocationId"></span>
+    </div>
+
+    <input type="hidden" asp-for="UserId" />
+
+    <button type="submit">ذخیره</button>
+</form>

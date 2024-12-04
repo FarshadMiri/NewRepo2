@@ -1,0 +1,183 @@
+﻿@{
+    ViewData["Title"] = "افزودن وظیفه";
+}
+
+<h2>افزودن وظیفه</h2>
+
+<!-- لینک به فایل‌های استایل persian-datepicker -->
+<link rel="stylesheet" href="https://babakhani.github.io/PersianWebToolkit/beta/lib/persian-datepicker/dist/css/persian-datepicker.css" />
+<!-- لینک به فایل‌های استایل persian-timepicker -->
+<link rel="stylesheet" href="https://babakhani.github.io/PersianWebToolkit/beta/lib/persian-timepicker/dist/css/persian-timepicker.css" />
+<!-- لینک به فایل‌های استایل noUiSlider -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/14.6.3/nouislider.min.css" />
+
+<div id="datepicker"></div>
+
+<div>
+    <label for="taskTitle">عنوان وظیفه:</label>
+    <input type="text" id="taskTitle" placeholder="عنوان تسک را وارد کنید..." />
+</div>
+
+<!-- فیلد بازه زمانی -->
+<div>
+    <label for="timeRange">بازه زمانی ساعت:</label>
+    <div id="timeRange"></div>
+</div>
+
+<div>
+    <span id="startTime">07:00</span> تا <span id="endTime">19:00</span>
+</div>
+
+<!-- فرم افزودن تسک -->
+<div>
+    <button id="addTaskButton">اضافه کردن وظیفه</button>
+</div>
+
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+    <script src="https://babakhani.github.io/PersianWebToolkit/beta/lib/persian-date/dist/persian-date.js"></script>
+    <script src="https://babakhani.github.io/PersianWebToolkit/beta/lib/persian-datepicker/dist/js/persian-datepicker.js"></script>
+    <script src="https://babakhani.github.io/PersianWebToolkit/beta/lib/persian-timepicker/dist/js/persian-timepicker.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/14.6.3/nouislider.min.js"></script>
+
+    <script>
+        let selectedDate = null;
+        let selectedTimeRange = { start: "07:00", end: "19:00" };
+        let occupiedTimes = []; // بازه‌های اشغال‌شده
+
+        // تنظیم تقویم فارسی
+        $('#datepicker').persianDatepicker({
+            inline: true,
+            format: 'YYYY/MM/DD',
+            onSelect: function (unixDate) {
+                selectedDate = new persianDate(unixDate).format('YYYY/MM/DD'); // تاریخ به فرمت شمسی
+                fetchOccupiedTimes(selectedDate); // گرفتن بازه‌های اشغال‌شده
+            }
+        });
+
+        // تابع برای دریافت بازه‌های زمانی اشغال‌شده
+        function fetchOccupiedTimes(date) {
+            $.ajax({
+                url: '@Url.Action("GetOccupiedTimes", "Task")',
+                type: 'GET',
+                data: { date: date },
+                success: function (response) {
+                    occupiedTimes = response; // ذخیره بازه‌های اشغال‌شده
+                    updateSlider(); // به‌روزرسانی اسلایدر
+                },
+                error: function () {
+                    alert('خطا در دریافت بازه‌های زمانی اشغال‌شده.');
+                }
+            });
+        }
+
+        // ایجاد اسلایدر برای انتخاب بازه زمانی
+        var slider = document.getElementById('timeRange');
+
+        function updateSlider() {
+            // حذف تایملاین قبلی
+            if (slider.noUiSlider) {
+                slider.noUiSlider.destroy();
+            }
+
+            // بازه زمانی کاری (7 صبح تا 7 عصر)
+            const minTime = 7;
+            const maxTime = 19;
+
+            // تنظیم بازه‌های زمانی و رنگ‌ها
+            let connectOptions = [];
+            let startHandles = [];
+            let lastEnd = minTime;
+
+            // پر کردن بازه‌های زمانی با هندل‌ها
+            occupiedTimes.forEach(time => {
+                // اضافه کردن هندل برای بازه‌های خالی قبل از هر بازه اشغال‌شده
+                if (time.StartTime > lastEnd) {
+                    startHandles.push(lastEnd); // هندل شروع بازه خالی
+                    connectOptions.push(true); // بازه خالی
+                }
+
+                // هندل‌ها و اتصالات برای بازه‌های اشغال‌شده
+                startHandles.push(time.StartTime); // هندل شروع بازه اشغال‌شده
+                connectOptions.push(false); // بازه اشغال‌شده
+                startHandles.push(time.EndTime); // هندل پایان بازه اشغال‌شده
+                connectOptions.push(false); // بازه اشغال‌شده
+
+                // به‌روزرسانی پایان آخرین بازه اشغال‌شده
+                lastEnd = time.EndTime;
+            });
+
+            // اضافه کردن بازه خالی نهایی
+            if (lastEnd < maxTime) {
+                startHandles.push(lastEnd); // هندل شروع بازه خالی
+                connectOptions.push(true); // بازه خالی
+            }
+            startHandles.push(maxTime); // هندل پایان بازه کاری
+
+            // تنظیم اسلایدر با هندل‌ها و اتصالات جدید
+            noUiSlider.create(slider, {
+                start: [minTime, maxTime], // بازه پیش‌فرض هندل‌ها
+                connect: connectOptions, // اتصال بازه‌ها
+                range: {
+                    'min': minTime,
+                    'max': maxTime
+                },
+                step: 1,
+                format: {
+                    to: value => Math.floor(value) + ":00",
+                    from: value => parseFloat(value)
+                }
+            });
+
+            // غیرفعال کردن بازه‌های اشغال‌شده
+            slider.noUiSlider.on('update', function (values, handle) {
+                const startTime = parseFloat(values[0]);
+                const endTime = parseFloat(values[1]);
+
+                // نمایش زمان انتخاب شده
+                document.getElementById('startTime').innerText = startTime.toFixed(0).padStart(2, '0') + ":00";
+                document.getElementById('endTime').innerText = endTime.toFixed(0).padStart(2, '0') + ":00";
+                selectedTimeRange = { start: startTime.toFixed(0) + ":00", end: endTime.toFixed(0) + ":00" };
+            });
+
+            // غیرفعال کردن نوارهای اشغال‌شده
+            const connectors = slider.querySelectorAll('.noUi-connect');
+            connectors.forEach((connector, index) => {
+                if (!connectOptions[index]) {
+                    // غیر فعال کردن
+                    connector.style.pointerEvents = 'none'; // این بازه قابل کلیک نخواهد بود
+                }
+            });
+        }
+
+        // افزودن وظیفه
+        $('#addTaskButton').on('click', function () {
+            const title = $('#taskTitle').val();
+            if (!selectedDate || !selectedTimeRange || !title) {
+                alert('لطفاً تاریخ، بازه زمانی و عنوان وظیفه را مشخص کنید.');
+                return;
+            }
+
+            // ارسال درخواست به سرور
+            $.ajax({
+                url: '@Url.Action("AddTask", "Task")',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    TaskDate: selectedDate,
+                    TaskStartTime: selectedTimeRange.start,
+                    TaskEndTime: selectedTimeRange.end,
+                    Title: title
+                }),
+                success: function () {
+                    alert('وظیفه با موفقیت اضافه شد.');
+                    $('#taskTitle').val(''); // پاک کردن فیلد عنوان
+                },
+                error: function () {
+                    alert('خطا در افزودن وظیفه رخ داد.');
+                }
+            });
+        });
+
+    </script>
+}

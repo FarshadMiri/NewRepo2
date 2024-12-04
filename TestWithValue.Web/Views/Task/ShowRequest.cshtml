@@ -1,0 +1,138 @@
+﻿@using TestWithValue.Domain.ViewModels.Task
+@model IEnumerable<TaskViewModel>
+
+<h2>لیست درخواست‌ها</h2>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>عنوان</th>
+            <th>تاریخ</th>
+            <th>وضعیت</th>
+            <th>جزئیات</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var task in Model)
+        {
+            <tr>
+                <td>@task.Title</td>
+                <td>@task.TaskDate.ToString("yyyy-MM-dd")</td>
+                <td>@(task.IsDone ? "پاسخ داده شده" : "در انتظار")</td>
+                <td>
+                    <button class="btn btn-info btn-sm" onclick="showTicketMessages(@task.TaskId,@Html.Raw(task.IsDone.ToString().ToLower()))">
+                        جزئیات
+                    </button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Modal نمایش پیام‌های تیکت -->
+<div id="messageModal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <h3>پیام‌های تیکت</h3>
+        <div id="messageList"></div>
+        <button onclick="closeModal()">بستن</button>
+    </div>
+</div>
+@section Scripts {
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@@microsoft/signalr@7.0.12/dist/browser/signalr.min.js"></script>
+
+    <script>
+        var connection = new signalR.HubConnectionBuilder()
+            .withUrl("/taskHub")  // آدرس هاب SignalR شما
+            .build();
+
+        connection.start().catch(function (err) {
+            return console.error("Error starting SignalR connection:", err);
+        });
+        // تابع برای نمایش پیام‌های تیکت
+        function showTicketMessages(taskId,isDone) {
+            $.ajax({
+                url: '/task/gettaskmessages', // مسیر جدید در صورت نیاز
+                type: 'GET',
+                data: { taskId: taskId }, // ارسال TaskId به جای TicketId
+                success: function (response) {
+                    console.log(response); // برای بررسی دقیق پاسخ
+
+                    // اطمینان از اینکه response.messages یک آرایه است
+                    const messages = response.messages || []; // اگر messages وجود نداشت، از یک آرایه خالی استفاده کن
+                    const isDone = response.isDone || false; // اگر isDone وجود نداشت، از false استفاده کن
+
+                    $('#messageList').empty(); // پاک کردن لیست قبلی
+
+                    if (Array.isArray(messages) && messages.length > 0) {
+                        messages.forEach(message => {
+                            $('#messageList').append(`
+                                <div class="message-item">
+                                    <p><strong>فرستنده:</strong> ${message.senderId}</p>
+                                    <p>${message.message}</p>
+                                    <p><small>ارسال شده در: ${message.sentAt}</small></p>
+                                    ${message.filePath ? `<a href="${message.filePath}" target="_blank">دانلود فایل</a>` : ''}
+                                    <hr>
+                                </div>
+                            `);
+                        });
+                    } else {
+                        $('#messageList').html('<p>هیچ پیامی برای این وظیفه وجود ندارد.</p>');
+                    }
+
+                    // اگر تسک پاسخ داده شده است، دکمه‌ها را نمایش دهیم
+                    if (isDone) {
+                        $('#messageList').append(`
+                            <div class="action-buttons">
+                                <button class="btn btn-success" onclick="confirmAndDownload(${taskId})">تأیید و دانلود</button>
+                                <button class="btn btn-warning" onclick="requestEdit(${taskId})">درخواست دوباره ویرایش</button>
+                            </div>
+                        `);
+                    }
+
+                    // نمایش Modal
+                    $('#messageModal').show();
+                },
+                error: function () {
+                    alert("خطایی رخ داده است. لطفا دوباره تلاش کنید.");
+                }
+            });
+        }
+        // بستن Modal
+        function closeModal() {
+            $('#messageModal').hide();
+        }
+        function confirmAndDownload(taskId) {
+            // ارسال درخواست به سرور برای دانلود پی‌دی‌اف
+            const apiUrl = `/task/downloadpdf?taskId=${taskId}`;
+
+            // درخواست برای دانلود پی‌دی‌اف
+            fetch(apiUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('خطا در تولید پی‌دی‌اف');
+                    }
+                    return response.blob(); // دریافت فایل پی‌دی‌اف به صورت blob
+                })
+                .then(blob => {
+                    // تبدیل blob به URL
+                    const url = window.URL.createObjectURL(blob);
+
+                    // ساخت یک لینک موقت برای دانلود
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `task_${taskId}_messages.pdf`;  // نام فایل پی‌دی‌اف
+                    document.body.appendChild(a);
+                    a.click();  // شبیه‌سازی کلیک برای دانلود
+                    a.remove();  // حذف لینک بعد از دانلود
+                    window.URL.revokeObjectURL(url);  // آزاد کردن URL
+                })
+                .catch(error => {
+                    console.error('Error downloading the PDF:', error);
+                    alert('خطایی رخ داده است. لطفاً دوباره تلاش کنید.');
+                });
+        }
+
+
+    </script>
+}
